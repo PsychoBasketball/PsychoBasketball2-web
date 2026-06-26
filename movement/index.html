@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <!-- CACHE POLICY: never serve a stale index.html. Combined with WebGL dataCaching=OFF (no IndexedDB) and
+       the per-deploy ?v= cache-bust on the build URLs below, every NORMAL reload loads the fresh build —
+       no incognito, no hard refresh ever needed. -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>PsychoBasketball2</title>
+  <style>
+    html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#05060a; }
+    #unity-container { position:fixed; inset:0; }
+    #unity-canvas { width:100%; height:100%; display:block; background:#05060a; }
+    #unity-loading-bar { position:fixed; left:50%; top:54%; transform:translate(-50%,-50%); width:260px; text-align:center;
+                         font-family:Arial,Helvetica,sans-serif; color:#cdd6ff; letter-spacing:1px; display:none; }
+    #unity-progress-bar-empty { width:100%; height:14px; margin-top:12px; background:#10141e; border:1px solid #2a3550; border-radius:7px; overflow:hidden; }
+    #unity-progress-bar-full { width:0%; height:100%; background:linear-gradient(90deg,#f78c1f,#ffce3a); }
+    #unity-warning { position:fixed; left:50%; top:8px; transform:translateX(-50%); z-index:10; font-family:Arial,sans-serif; }
+  </style>
+  <!-- Google Identity Services (browser sign-in). Client ID only (no secret in the browser). The OAuth
+       "Authorized JavaScript origin" must match the serving origin: https://psychobasketball.com -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <div id="unity-container">
+    <canvas id="unity-canvas" width="960" height="600" tabindex="-1"></canvas>
+    <div id="unity-loading-bar">
+      <div>PsychoBasketball2 &mdash; loading&hellip;</div>
+      <div id="unity-progress-bar-empty"><div id="unity-progress-bar-full"></div></div>
+    </div>
+    <div id="unity-warning"></div>
+  </div>
+  <script>
+    var canvas = document.querySelector("#unity-canvas");
+
+    function unityShowBanner(msg, type) {
+      var w = document.querySelector("#unity-warning");
+      var d = document.createElement('div'); d.innerHTML = msg;
+      d.style = (type == 'error') ? 'background:#c0392b;padding:8px;color:#fff' : 'background:#caa400;padding:8px';
+      w.appendChild(d);
+      if (type != 'error') setTimeout(function(){ try { w.removeChild(d); } catch (e) {} }, 5000);
+    }
+
+    var buildUrl = "Build";
+    // Per-deploy CACHE-BUST token: tools/deploy-web.sh replaces 20260626064230 with a unique value every
+    // deploy, so the browser fetches FRESH build files and can never serve a stale .data/.wasm/.framework.
+    var cb = "?v=20260626064230";
+    var config = {
+      arguments: [],
+      dataUrl: buildUrl + "/WebGL-Movement.data.unityweb" + cb,
+      frameworkUrl: buildUrl + "/WebGL-Movement.framework.js.unityweb" + cb,
+      codeUrl: buildUrl + "/WebGL-Movement.wasm.unityweb" + cb,
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "DefaultCompany",
+      productName: "PsychoBasketball2",
+      productVersion: "0.1",
+      showBanner: unityShowBanner,
+      // We size the WebGL render target OURSELVES (below). By default Unity matches it to the canvas DOM size
+      // x devicePixelRatio - that DPR multiply is what made the UI render tiny on Retina/high-DPI screens.
+      matchWebGLToCanvasSize: false,
+    };
+
+    // Scale the UI to a landscape design reference, "covering" it in BOTH width and height so fixed-pixel
+    // UI keeps ~desktop proportions on any aspect — including narrow/portrait PHONES, where a height-only
+    // cap left it oversized. We never multiply by devicePixelRatio (no Retina halving). MAX_UPSCALE caps how
+    // far small screens upscale: it stops the UI over-shrinking, so on a phone the menus/HUD/text land at a
+    // balanced size (not oversized), menu buttons stay tappable, and the menus keep enough vertical room.
+    // Desktop (>=16:9) is unchanged from the previous REF=900 behaviour. Resize- and mobile-friendly.
+    var REF_W = 1600, REF_H = 900;   // desktop looks right at this render buffer
+    var MAX_UPSCALE = 1.5;           // phone balance knob: LOWER = bigger phone UI, HIGHER = smaller
+    function resizeCanvas() {
+      var w = window.innerWidth, h = window.innerHeight;
+      canvas.style.width  = w + "px";
+      canvas.style.height = h + "px";
+      var scale = Math.max(REF_W / w, REF_H / h);     // cover the design area in both dimensions
+      if (scale > MAX_UPSCALE) scale = MAX_UPSCALE;   // don't over-shrink the UI on small/portrait phones
+      canvas.width  = Math.max(1, Math.round(w * scale));
+      canvas.height = Math.max(1, Math.round(h * scale));
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    // ===================== GOOGLE SIGN-IN (Google Identity Services) =====================
+    // The Unity login calls window.PBGoogleSignIn(targetName) via Assets/Plugins/WebGL/GoogleSignIn.jslib.
+    // We show the official Google button, and on success decode the ID-token JWT (id/name/email) and
+    // SendMessage it back to Unity. Client ID only - no secret here; the backend verifies the token later.
+    var PB_GOOGLE_CLIENT_ID = "288835060053-6247gc14ioduavd95c9gk6auttceu7j6.apps.googleusercontent.com";
+    var pbGoogleTarget = null, pbGoogleInited = false;
+
+    function pbGsiSend(method, msg) {
+      if (window.__unityInstance && pbGoogleTarget) window.__unityInstance.SendMessage(pbGoogleTarget, method, msg || "");
+    }
+    // Decode a JWT payload (base64url, UTF-8 safe). Display only - signature verification is the backend's job.
+    function pbDecodeJwt(tok) {
+      try {
+        var p = tok.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+        while (p.length % 4) p += "=";
+        var json = decodeURIComponent(atob(p).split("").map(function (c) {
+          return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(""));
+        return JSON.parse(json);
+      } catch (e) { return null; }
+    }
+    function pbGoogleCallback(resp) {
+      pbCloseGoogleModal();
+      var info = (resp && resp.credential) ? pbDecodeJwt(resp.credential) : null;
+      if (info && info.sub) {
+        pbGsiSend("OnGoogleCredential", JSON.stringify({
+          id: info.sub, name: info.name || info.email || "Google Player", email: info.email || ""
+        }));
+      } else {
+        pbGsiSend("OnGoogleSignInFailed", "no-credential");
+      }
+    }
+    function pbInitGoogle() {
+      if (pbGoogleInited) return true;
+      if (typeof google === "undefined" || !google.accounts || !google.accounts.id) return false;
+      google.accounts.id.initialize({
+        client_id: PB_GOOGLE_CLIENT_ID, callback: pbGoogleCallback,
+        auto_select: false, cancel_on_tap_outside: true
+      });
+      pbGoogleInited = true;
+      return true;
+    }
+    function pbCloseGoogleModal() { var e = document.getElementById("pb-gsi-overlay"); if (e && e.parentNode) e.parentNode.removeChild(e); }
+    function pbShowGoogleModal() {
+      pbCloseGoogleModal();
+      var ov = document.createElement("div"); ov.id = "pb-gsi-overlay";
+      ov.style.cssText = "position:fixed;inset:0;background:rgba(3,5,12,0.82);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:Arial,Helvetica,sans-serif;";
+      var box = document.createElement("div");
+      box.style.cssText = "background:#0e1422;border:1px solid #2a3550;border-radius:12px;padding:24px 26px;text-align:center;max-width:340px;box-shadow:0 12px 44px rgba(0,0,0,0.6);";
+      box.innerHTML = '<div style="color:#e7ecff;font-size:17px;font-weight:bold;">Sign in to Psycho Basketball</div>'
+                    + '<div style="color:#7f8db0;font-size:12px;margin:6px 0 18px;">+25% rewards &amp; cross-device save</div>';
+      var slot = document.createElement("div"); slot.id = "pb-gsi-button"; slot.style.cssText = "display:flex;justify-content:center;min-height:44px;";
+      box.appendChild(slot);
+      var cancel = document.createElement("div");
+      cancel.textContent = "Cancel"; cancel.style.cssText = "margin-top:16px;color:#8aa0c8;font-size:13px;cursor:pointer;text-decoration:underline;";
+      cancel.onclick = function () { pbCloseGoogleModal(); pbGsiSend("OnGoogleSignInFailed", "cancelled"); };
+      box.appendChild(cancel);
+      ov.addEventListener("click", function (e) { if (e.target === ov) { pbCloseGoogleModal(); pbGsiSend("OnGoogleSignInFailed", "cancelled"); } });
+      ov.appendChild(box); document.body.appendChild(ov);
+      google.accounts.id.renderButton(slot, { theme: "filled_blue", size: "large", shape: "pill", text: "continue_with", width: 260 });
+    }
+    // Entry point called from the .jslib when the player taps "Continue with Google" in the Unity menu.
+    // The GIS library loads async, so wait briefly for it before giving up (avoids a race on a fast tap).
+    window.PBGoogleSignIn = function (target) {
+      pbGoogleTarget = target;
+      var tries = 0;
+      (function attempt() {
+        if (pbInitGoogle()) { pbShowGoogleModal(); return; }
+        if (++tries > 40) { pbGsiSend("OnGoogleSignInFailed", "gis-not-loaded"); return; }
+        setTimeout(attempt, 100);   // up to ~4s for accounts.google.com/gsi/client to finish loading
+      })();
+    };
+    // =====================================================================================
+
+    // ===================== TELEGRAM + DISCORD SIGN-IN =====================
+    // Same pattern as Google: tap in Unity -> SocialSignIn.jslib -> these functions -> a small modal with the
+    // provider's REAL button -> real auth -> SendMessage the verified identity back to Unity. Fill in the two
+    // config values once you've registered each app (see the report), then rebuild. Until set, they fail
+    // cleanly (NO fake sign-in). Client-side identifiers only - no bot token / client secret in the browser.
+    var PB_TELEGRAM_BOT = "PsychoBasketballBot";   // BotFather bot USERNAME (no @); /setdomain -> psychobasketball.com
+    var PB_DISCORD_CLIENT_ID = "1515774738960617584";   // Discord application CLIENT ID (redirect URI: <origin>/discord-callback.html)
+
+    // A small on-screen toast so sign-in failures are VISIBLE (instead of silently doing nothing).
+    function pbToast(msg, isError) {
+      var t = document.createElement("div");
+      t.textContent = msg;
+      t.style.cssText = "position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:100000;color:#fff;padding:10px 16px;border-radius:8px;font:13px Arial,Helvetica,sans-serif;max-width:90%;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.5);background:" + (isError ? "#7a1f1f" : "#1f3a5a") + ";";
+      document.body.appendChild(t);
+      setTimeout(function () { try { t.parentNode.removeChild(t); } catch (e) {} }, 6000);
+    }
+
+    // shared modal (kept separate from the Google one so the live Google flow is untouched)
+    function pbCloseSocialModal() { var e = document.getElementById("pb-social-overlay"); if (e && e.parentNode) e.parentNode.removeChild(e); }
+    function pbShowSocialModal(title, render, onCancel) {
+      pbCloseSocialModal();
+      var ov = document.createElement("div"); ov.id = "pb-social-overlay";
+      ov.style.cssText = "position:fixed;inset:0;background:rgba(3,5,12,0.82);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:Arial,Helvetica,sans-serif;";
+      var box = document.createElement("div");
+      box.style.cssText = "background:#0e1422;border:1px solid #2a3550;border-radius:12px;padding:24px 26px;text-align:center;max-width:340px;box-shadow:0 12px 44px rgba(0,0,0,0.6);";
+      box.innerHTML = '<div style="color:#e7ecff;font-size:17px;font-weight:bold;">' + title + '</div>'
+                    + '<div style="color:#7f8db0;font-size:12px;margin:6px 0 18px;">+25% rewards &amp; cross-device save</div>';
+      var slot = document.createElement("div"); slot.style.cssText = "display:flex;justify-content:center;min-height:44px;";
+      box.appendChild(slot);
+      var cancel = document.createElement("div");
+      cancel.textContent = "Cancel"; cancel.style.cssText = "margin-top:16px;color:#8aa0c8;font-size:13px;cursor:pointer;text-decoration:underline;";
+      cancel.onclick = function () { pbCloseSocialModal(); if (onCancel) onCancel(); };
+      box.appendChild(cancel);
+      ov.addEventListener("click", function (e) { if (e.target === ov) { pbCloseSocialModal(); if (onCancel) onCancel(); } });
+      ov.appendChild(box); document.body.appendChild(ov);
+      render(slot);
+    }
+
+    // --- TELEGRAM (official Login Widget) ---
+    var pbTgTarget = null;
+    function pbTgSend(method, msg) { if (window.__unityInstance && pbTgTarget) window.__unityInstance.SendMessage(pbTgTarget, method, msg || ""); }
+    window.pbOnTelegramAuth = function (user) {   // the widget's data-onauth calls this global with the signed-in user
+      pbCloseSocialModal();
+      if (user && user.id) {
+        var nm = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "Telegram Player";
+        pbTgSend("OnTelegramCredential", JSON.stringify({ id: String(user.id), name: nm, username: user.username || "" }));
+      } else { pbTgSend("OnTelegramFailed", "no-user"); }
+    };
+    window.PBTelegramSignIn = function (target) {
+      pbTgTarget = target;
+      console.log("[PB] Telegram tapped; bot=" + PB_TELEGRAM_BOT + " host=" + location.hostname);
+      if (!PB_TELEGRAM_BOT) { pbToast("Telegram isn't configured (no bot username).", true); pbTgSend("OnTelegramFailed", "not-configured"); return; }
+      pbShowSocialModal("Continue with Telegram", function (slot) {
+        var note = document.createElement("div");
+        note.style.cssText = "color:#7f8db0;font-size:12px;margin-top:12px;max-width:264px;";
+        note.textContent = "Loading Telegram…";
+        var s = document.createElement("script");
+        s.async = true; s.src = "https://telegram.org/js/telegram-widget.js?22";
+        s.setAttribute("data-telegram-login", PB_TELEGRAM_BOT);
+        s.setAttribute("data-size", "large");
+        s.setAttribute("data-userpic", "false");
+        s.setAttribute("data-request-access", "write");
+        s.setAttribute("data-onauth", "pbOnTelegramAuth(user)");
+        s.onerror = function () { note.style.color = "#ff9b9b"; note.textContent = "Couldn't load Telegram's widget (network/blocked)."; console.warn("[PB] telegram-widget.js failed to load"); };
+        slot.appendChild(s); slot.appendChild(note);
+        // If the button iframe never appears, the bot username is wrong OR /setdomain isn't set for this host.
+        setTimeout(function () {
+          if (slot.querySelector("iframe")) { note.textContent = ""; return; }
+          note.style.color = "#ff9b9b";
+          note.textContent = "Telegram button didn't load - check bot @" + PB_TELEGRAM_BOT + " and that /setdomain = " + location.hostname;
+          console.warn("[PB] Telegram widget did not render. bot=" + PB_TELEGRAM_BOT + " host=" + location.hostname);
+        }, 4500);
+      }, function () { pbTgSend("OnTelegramFailed", "cancelled"); });
+    };
+
+    // --- DISCORD (OAuth2 implicit flow: popup -> discord-callback.html -> postMessage) ---
+    var pbDcTarget = null, pbDcListening = false;
+    function pbDcSend(method, msg) { if (window.__unityInstance && pbDcTarget) window.__unityInstance.SendMessage(pbDcTarget, method, msg || ""); }
+    window.PBDiscordSignIn = function (target) {
+      pbDcTarget = target;
+      console.log("[PB] Discord tapped; clientId=" + PB_DISCORD_CLIENT_ID);
+      if (!PB_DISCORD_CLIENT_ID) { pbToast("Discord isn't configured (no client ID).", true); pbDcSend("OnDiscordFailed", "not-configured"); return; }
+      if (!pbDcListening) {
+        pbDcListening = true;
+        window.addEventListener("message", function (e) {
+          if (e.origin !== location.origin || !e.data || !e.data.pbDiscord) return;
+          pbCloseSocialModal();
+          var d = e.data.pbDiscord;
+          if (d.ok && d.id) pbDcSend("OnDiscordCredential", JSON.stringify({ id: d.id, name: d.name || "", username: d.username || "" }));
+          else { pbToast("Discord sign-in failed (couldn't read your profile).", true); pbDcSend("OnDiscordFailed", "auth-failed"); }
+        });
+      }
+      pbShowSocialModal("Continue with Discord", function (slot) {
+        var btn = document.createElement("button");
+        btn.textContent = "Continue with Discord";
+        btn.style.cssText = "background:#5865F2;color:#fff;border:0;border-radius:20px;padding:11px 24px;font-size:15px;font-weight:bold;cursor:pointer;";
+        btn.onclick = function () {
+          var redirect = location.origin + "/discord-callback.html";
+          var url = "https://discord.com/oauth2/authorize?client_id=" + encodeURIComponent(PB_DISCORD_CLIENT_ID)
+                  + "&response_type=token&scope=" + encodeURIComponent("identify email")
+                  + "&prompt=consent&redirect_uri=" + encodeURIComponent(redirect);
+          var w = window.open(url, "pb_discord_oauth", "width=520,height=760");
+          if (!w) { pbToast("Popup blocked - allow popups for this site, then retry.", true); console.warn("[PB] Discord popup blocked"); }
+        };
+        slot.appendChild(btn);
+      }, function () { pbDcSend("OnDiscordFailed", "cancelled"); });
+    };
+    // =====================================================================
+
+    document.querySelector("#unity-loading-bar").style.display = "block";
+
+    var script = document.createElement("script");
+    script.src = buildUrl + "/WebGL-Movement.loader.js" + cb;
+    script.onload = function () {
+      createUnityInstance(canvas, config, function (progress) {
+        document.querySelector("#unity-progress-bar-full").style.width = (100 * progress) + "%";
+      }).then(function (unityInstance) {
+        window.__unityInstance = unityInstance;   // so the Google bridge can SendMessage results back to Unity
+        document.querySelector("#unity-loading-bar").style.display = "none";
+        resizeCanvas();
+      }).catch(function (message) { alert(message); });
+    };
+    document.body.appendChild(script);
+  </script>
+</body>
+</html>
