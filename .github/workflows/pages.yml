@@ -1,0 +1,66 @@
+# ====================================================================================================
+# PUBLISH THE SITE.
+# ----------------------------------------------------------------------------------------------------
+# This replaces the legacy (Jekyll) Pages build, which had been failing on every push since
+# 2026-08-06 with nothing but "Page build failed" — and failing SILENTLY, so /hood/ quietly served a
+# two-day-old build while two deploys reported success.
+#
+# The cause was repo weight, not content. This branch is generated output: every deploy appends a
+# fresh ~45MB WebGL payload, 29 of them had stacked up to 568MB, and the legacy builder clones the
+# whole repository before it can publish 45MB of site.
+#
+# fetch-depth: 1 is the fix, and the reason this is a real fix rather than headroom. A shallow
+# checkout takes the tip commit only, so the history is never transferred and the branch can keep
+# growing forever without the publish getting slower or falling over again.
+# ====================================================================================================
+name: Publish site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:      # so a publish can be re-run without inventing a commit
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys publish at once, but never cancel one either — a half-published site would
+# take the arcade at / down alongside the testbed at /hood/.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1          # tip only — this is what stops history weight from mattering
+
+      # Prove the payload is intact BEFORE publishing. Both entry points must exist: a deploy that
+      # takes the arcade down to put the testbed up is a failed deploy, in either direction.
+      - name: Check both entry points are present
+        run: |
+          for f in index.html hood/index.html .nojekyll CNAME hood/version.txt; do
+            [ -e "$f" ] || { echo "::error::missing $f — refusing to publish a broken site"; exit 1; }
+            echo "  ok  $f"
+          done
+          echo "  hood build marker: $(cat hood/version.txt)"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      # 30 MINUTES. The action defaults to giving up after 10, and this 45MB payload has sat at
+      # "deployment_in_progress" past that and then published fine a few minutes later -- so the default
+      # marks a healthy deploy as failed. Publishing is usually under two minutes; the long ceiling only
+      # exists so the slow tail reports the truth instead of a red run over a site that went live.
+      - id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 1800000
