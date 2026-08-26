@@ -59,9 +59,9 @@
     }
 
     var buildUrl = "Build";
-    // Per-deploy CACHE-BUST token: tools/deploy-web.sh replaces 20260826075555 with a unique value every
+    // Per-deploy CACHE-BUST token: tools/deploy-web.sh replaces 20260826081302 with a unique value every
     // deploy, so the browser fetches FRESH build files and can never serve a stale .data/.wasm/.framework.
-    var cb = "?v=20260826075555";
+    var cb = "?v=20260826081302";
     var config = {
       arguments: [],
       dataUrl: buildUrl + "/WebGL-Hood.data.unityweb" + cb,
@@ -306,7 +306,7 @@
     // token, this index is stale -> reload with a cache-busting query on the PAGE URL so the browser must
     // refetch a fresh index. Guarded to reload at most ONCE (?fresh=), so a lagging CDN edge can't loop.
     (function pbFreshnessGate() {
-      var BAKED = "20260826075555";
+      var BAKED = "20260826081302";
       console.log("[Build] index.html token=" + BAKED + " loaded");   // provable freshness at page load, no network needed
       var already = null;
       try { already = new URLSearchParams(location.search).get("fresh"); } catch (e) {}
