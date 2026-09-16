@@ -15,10 +15,23 @@
     html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#05060a; }
     #unity-container { position:fixed; inset:0; }
     #unity-canvas { width:100%; height:100%; display:block; background:#05060a; }
-    #unity-loading-bar { position:fixed; left:50%; top:54%; transform:translate(-50%,-50%); width:260px; text-align:center;
-                         font-family:Arial,Helvetica,sans-serif; color:#cdd6ff; letter-spacing:1px; display:none; }
-    #unity-progress-bar-empty { width:100%; height:14px; margin-top:12px; background:#10141e; border:1px solid #2a3550; border-radius:7px; overflow:hidden; }
-    #unity-progress-bar-full { width:0%; height:100%; background:linear-gradient(90deg,#f78c1f,#ffce3a); }
+    /* THE LOADING SCREEN (v276). The first thing anyone sees, for 10-40 seconds: the game's name, a bar that
+       tracks the real download, and one line that says what is happening. Court blue on night black, the
+       menu's yellow for the caret — the same tokens the game draws its own menu in, so the hand-off is quiet. */
+    #pb-load { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#05060a;
+               background-image:radial-gradient(ellipse 70% 55% at 50% 58%, rgba(56,110,190,0.28), rgba(5,6,10,0) 70%); }
+    #pb-load .in { width:min(520px, 86vw); text-align:center; color:#e9edf5; font-family:"Arial Narrow","Helvetica Neue",Arial,sans-serif; }
+    #pb-load .eyebrow { font:600 12px/1 Arial,Helvetica,sans-serif; letter-spacing:0.28em; color:#8fa3c7; text-transform:uppercase; margin-bottom:14px; }
+    #pb-load h1 { margin:0; font:900 clamp(40px,9vw,72px)/0.92 Impact,"Arial Narrow","Helvetica Neue",Arial,sans-serif; letter-spacing:0.01em; text-transform:uppercase; color:#ffffff;
+                  text-shadow:0 2px 0 #1a2438, 0 0 28px rgba(80,140,230,0.35); }
+    #pb-load .sub { margin:10px 0 30px; font:15px/1.4 Arial,Helvetica,sans-serif; color:#a9b7d0; }
+    #pb-load .track { position:relative; height:10px; background:#141a26; border:1px solid #2a3550; border-radius:5px; overflow:hidden; }
+    #pb-load .fill { position:absolute; left:0; top:0; bottom:0; width:0%; background:linear-gradient(90deg,#3a7bd5,#7fc0ff); transition:width .25s ease-out; }
+    #pb-load .fill.ready { background:linear-gradient(90deg,#e6b422,#ffd85a); }
+    #pb-load .row { display:flex; justify-content:space-between; margin-top:10px; font:13px/1 Arial,Helvetica,sans-serif; color:#8fa3c7; letter-spacing:0.06em; }
+    #pb-load .row b { color:#ffd85a; font-weight:700; font-variant-numeric:tabular-nums; }
+    #pb-load .hint { margin-top:34px; font:12px/1.5 Arial,Helvetica,sans-serif; color:#5f6f8c; }
+    #unity-loading-bar { display:none; }
     #unity-warning { position:fixed; left:50%; top:8px; transform:translateX(-50%); z-index:10; font-family:Arial,sans-serif; }
   </style>
   <!-- Google Identity Services (browser sign-in). Client ID only (no secret in the browser). The OAuth
@@ -41,10 +54,17 @@
 <body>
   <div id="unity-container">
     <canvas id="unity-canvas" width="960" height="600" tabindex="-1"></canvas>
-    <div id="unity-loading-bar">
-      <div>PsychoBasketball2 &mdash; loading&hellip;</div>
-      <div id="unity-progress-bar-empty"><div id="unity-progress-bar-full"></div></div>
+    <div id="pb-load">
+      <div class="in">
+        <div class="eyebrow">Free to play &middot; in the browser</div>
+        <h1>Psycho Basketball</h1>
+        <div class="sub">an open world basketball game</div>
+        <div class="track"><div class="fill" id="pb-fill"></div></div>
+        <div class="row"><span id="pb-stage">Connecting</span><b id="pb-pct">0%</b></div>
+        <div class="hint" id="pb-hint">About 27 MB the first time; your browser keeps it for next time.</div>
+      </div>
     </div>
+    <div id="unity-loading-bar" hidden></div>
     <div id="unity-warning"></div>
   </div>
   <script>
@@ -59,14 +79,14 @@
     }
 
     var buildUrl = "Build";
-    // Per-deploy CACHE-BUST token: tools/deploy-web.sh replaces 20260913191353 with a unique value every
+    // Per-deploy CACHE-BUST token: tools/deploy-web.sh replaces 20260916182545 with a unique value every
     // deploy, so the browser fetches FRESH build files and can never serve a stale .data/.wasm/.framework.
-    var cb = "?v=20260913191353";
+    var cb = "?v=20260916182545";
     var config = {
       arguments: [],
-      dataUrl: buildUrl + "/WebGL-Hood.data.unityweb" + cb,
-      frameworkUrl: buildUrl + "/WebGL-Hood.framework.js.unityweb" + cb,
-      codeUrl: buildUrl + "/WebGL-Hood.wasm.unityweb" + cb,
+      dataUrl: buildUrl + "/WebGL-Hood.data" + cb,
+      frameworkUrl: buildUrl + "/WebGL-Hood.framework.js" + cb,
+      codeUrl: buildUrl + "/WebGL-Hood.wasm" + cb,
       streamingAssetsUrl: "StreamingAssets",
       companyName: "DefaultCompany",
       productName: "PsychoBasketball2",
@@ -281,19 +301,38 @@
     // =====================================================================
 
     // Boot the Unity build (loader.js -> createUnityInstance). Called only AFTER the freshness gate below.
+    // THE BAR MEANS SOMETHING: Unity's progress runs 0 -> 0.9 while the files download and lands on 1.0 only when the
+    // engine has started, so 0-90% is the download and the last stretch is the start-up. The stage line says which.
+    var pbLoad = document.getElementById("pb-load"), pbFill = document.getElementById("pb-fill"),
+        pbStage = document.getElementById("pb-stage"), pbPct = document.getElementById("pb-pct"), pbHint = document.getElementById("pb-hint");
+    function pbSetProgress(p) {
+      var pct = Math.max(0, Math.min(100, Math.round(p * 100)));
+      pbFill.style.width = pct + "%"; pbPct.textContent = pct + "%";
+      if (p < 0.02)       pbStage.textContent = "Connecting";
+      else if (p < 0.9)   pbStage.textContent = "Downloading the neighbourhood";
+      else if (p < 1)     { pbStage.textContent = "Starting the engine"; pbFill.classList.add("ready"); }
+      else                { pbStage.textContent = "Ready"; pbFill.classList.add("ready"); }
+    }
     function pbBootUnity() {
-      document.querySelector("#unity-loading-bar").style.display = "block";
+      pbLoad.style.display = "flex";
+      var t0 = Date.now();
       var script = document.createElement("script");
       script.src = buildUrl + "/WebGL-Hood.loader.js" + cb;
       script.onload = function () {
-        createUnityInstance(canvas, config, function (progress) {
-          document.querySelector("#unity-progress-bar-full").style.width = (100 * progress) + "%";
-        }).then(function (unityInstance) {
+        createUnityInstance(canvas, config, function (progress) { pbSetProgress(progress); })
+        .then(function (unityInstance) {
           window.__unityInstance = unityInstance;   // so the Google bridge can SendMessage results back to Unity
-          document.querySelector("#unity-loading-bar").style.display = "none";
+          pbSetProgress(1);
+          console.log("[Load] engine started " + ((Date.now() - t0) / 1000).toFixed(1) + "s after the loader");
+          setTimeout(function () { pbLoad.style.display = "none"; }, 250);   // the menu draws its first frame under it
           resizeCanvas();
-        }).catch(function (message) { alert(message); });
+        }).catch(function (message) {
+          pbStage.textContent = "Could not start";
+          pbHint.textContent = "This browser could not run the game: " + message + " — try the latest Chrome, Edge or Firefox on a desktop.";
+          console.error("[Load] " + message);
+        });
       };
+      script.onerror = function () { pbStage.textContent = "Could not load"; pbHint.textContent = "The game files did not download. Check the connection and reload."; };
       document.body.appendChild(script);
     }
 
@@ -306,7 +345,7 @@
     // token, this index is stale -> reload with a cache-busting query on the PAGE URL so the browser must
     // refetch a fresh index. Guarded to reload at most ONCE (?fresh=), so a lagging CDN edge can't loop.
     (function pbFreshnessGate() {
-      var BAKED = "20260913191353";
+      var BAKED = "20260916182545";
       console.log("[Build] index.html token=" + BAKED + " loaded");   // provable freshness at page load, no network needed
       var already = null;
       try { already = new URLSearchParams(location.search).get("fresh"); } catch (e) {}
