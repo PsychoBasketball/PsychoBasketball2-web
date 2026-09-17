@@ -14,7 +14,23 @@
   <style>
     html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#05060a; }
     #unity-container { position:fixed; inset:0; }
-    #unity-canvas { width:100%; height:100%; display:block; background:#05060a; }
+    #unity-canvas { width:100%; height:100%; display:block; background:#05060a; touch-action:none; -webkit-user-select:none; user-select:none; }
+    /* THE ROTATE PROMPT (v279). A phone arriving from a Short is held upright; the game plays sideways. Only a coarse
+       pointer (a finger) in portrait sees this; it clears the moment the phone turns, no reload — the game keeps loading
+       and running underneath, and the prompt just blocks taps until the orientation is right. */
+    #pb-rotate { position:fixed; inset:0; z-index:20000; display:none; align-items:center; justify-content:center; text-align:center;
+                 background:#05060a; background-image:radial-gradient(ellipse 70% 55% at 50% 45%, rgba(56,110,190,0.28), rgba(5,6,10,0) 70%);
+                 color:#e9edf5; font-family:"Arial Narrow","Helvetica Neue",Arial,sans-serif; padding:24px; }
+    #pb-rotate .phone { width:46px; height:82px; border:3px solid #7fc0ff; border-radius:9px; margin:0 auto 26px; position:relative;
+                        animation:pb-turn 2.2s ease-in-out infinite; }
+    #pb-rotate .phone:after { content:""; position:absolute; left:50%; bottom:6px; width:14px; height:3px; margin-left:-7px; background:#7fc0ff; border-radius:2px; }
+    @keyframes pb-turn { 0%,25% { transform:rotate(0deg); } 55%,80% { transform:rotate(-90deg); } 100% { transform:rotate(0deg); } }
+    #pb-rotate .eyebrow { font:600 12px/1 Arial,Helvetica,sans-serif; letter-spacing:0.28em; color:#8fa3c7; text-transform:uppercase; margin-bottom:14px; }
+    #pb-rotate h1 { margin:0; font:900 clamp(34px,11vw,56px)/0.92 Impact,"Arial Narrow","Helvetica Neue",Arial,sans-serif; text-transform:uppercase; color:#fff;
+                    text-shadow:0 2px 0 #1a2438, 0 0 28px rgba(80,140,230,0.35); }
+    #pb-rotate .line { margin:22px 0 0; font:600 18px/1.35 Arial,Helvetica,sans-serif; color:#ffd85a; }
+    #pb-rotate .sub { margin:8px 0 0; font:14px/1.4 Arial,Helvetica,sans-serif; color:#a9b7d0; }
+    @media (prefers-reduced-motion: reduce) { #pb-rotate .phone { animation:none; transform:rotate(-90deg); } }
     /* THE LOADING SCREEN (v276). The first thing anyone sees, for 10-40 seconds: the game's name, a bar that
        tracks the real download, and one line that says what is happening. Court blue on night black, the
        menu's yellow for the caret — the same tokens the game draws its own menu in, so the hand-off is quiet. */
@@ -65,6 +81,15 @@
       </div>
     </div>
     <div id="unity-loading-bar" hidden></div>
+    <div id="pb-rotate">
+      <div>
+        <div class="phone"></div>
+        <div class="eyebrow">Free to play &middot; in the browser</div>
+        <h1>Psycho Basketball</h1>
+        <div class="line">Turn your phone sideways</div>
+        <div class="sub">The game plays in landscape. It keeps loading while you turn.</div>
+      </div>
+    </div>
     <div id="unity-warning"></div>
   </div>
   <script>
@@ -79,9 +104,9 @@
     }
 
     var buildUrl = "Build";
-    // Per-deploy CACHE-BUST token: tools/deploy-web.sh replaces 20260917141155 with a unique value every
+    // Per-deploy CACHE-BUST token: tools/deploy-web.sh replaces 20260917153135 with a unique value every
     // deploy, so the browser fetches FRESH build files and can never serve a stale .data/.wasm/.framework.
-    var cb = "?v=20260917141155";
+    var cb = "?v=20260917153135";
     var config = {
       arguments: [],
       dataUrl: buildUrl + "/WebGL-Hood.data" + cb,
@@ -116,6 +141,20 @@
     }
     window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
+
+    // PORTRAIT IS A PROMPT, LANDSCAPE IS THE GAME (v279). Coarse pointer = a finger; a desktop with a tall window never sees
+    // this. Evaluated live on resize and orientationchange, so turning the phone clears it without a reload.
+    var pbRotate = document.getElementById("pb-rotate");
+    function pbIsCoarse() { try { return window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 1; } catch (e) { return navigator.maxTouchPoints > 1; } }
+    function pbUpdateRotate() {
+      var portrait = window.innerHeight > window.innerWidth;
+      var show = pbIsCoarse() && portrait;
+      if ((pbRotate.style.display === "flex") !== show) console.log("[Page] rotate prompt " + (show ? "ON (portrait, touch)" : "off"));
+      pbRotate.style.display = show ? "flex" : "none";
+    }
+    window.addEventListener("resize", pbUpdateRotate);
+    window.addEventListener("orientationchange", function () { setTimeout(pbUpdateRotate, 60); });
+    pbUpdateRotate();
 
     // ===================== GOOGLE SIGN-IN (Google Identity Services) =====================
     // The Unity login calls window.PBGoogleSignIn(targetName) via Assets/Plugins/WebGL/GoogleSignIn.jslib.
@@ -345,7 +384,7 @@
     // token, this index is stale -> reload with a cache-busting query on the PAGE URL so the browser must
     // refetch a fresh index. Guarded to reload at most ONCE (?fresh=), so a lagging CDN edge can't loop.
     (function pbFreshnessGate() {
-      var BAKED = "20260917141155";
+      var BAKED = "20260917153135";
       console.log("[Build] index.html token=" + BAKED + " loaded");   // provable freshness at page load, no network needed
       var already = null;
       try { already = new URLSearchParams(location.search).get("fresh"); } catch (e) {}
