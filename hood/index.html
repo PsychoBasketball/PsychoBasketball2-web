@@ -154,9 +154,9 @@
     document.getElementById("pb-fail-retry").addEventListener("click", function () { location.reload(); });
 
     var buildUrl = "Build";
-    // Per-deploy CACHE-BUST token: tools/deploy-web.sh replaces 20260918181454 with a unique value every
+    // Per-deploy CACHE-BUST token: tools/deploy-web.sh replaces 20260918183150 with a unique value every
     // deploy, so the browser fetches FRESH build files and can never serve a stale .data/.wasm/.framework.
-    var cb = "?v=20260918181454";
+    var cb = "?v=20260918183150";
     var config = {
       arguments: [],
       dataUrl: buildUrl + "/WebGL-Hood.data" + cb,
@@ -169,7 +169,7 @@
       // theirs: the runtime keys /idbfs/<md5> on the page's own URL (measured: md5("https://psychobasketball.com/hood")).
       companyName: "DefaultCompany",
       productName: "PsychoBasketball2",
-      productVersion: "1.0.287",
+      productVersion: "1.0.288",
       showBanner: unityShowBanner,
       // A crash in the engine (an abort, out of memory, an uncaught exception) comes here instead of a browser dialog.
       errorHandler: function (message, filename, lineno) {
@@ -261,7 +261,7 @@
     // token, this index is stale -> reload with a cache-busting query on the PAGE URL so the browser must
     // refetch a fresh index. Guarded to reload at most ONCE (?fresh=), so a lagging CDN edge can't loop.
     (function pbFreshnessGate() {
-      var BAKED = "20260918181454";
+      var BAKED = "20260918183150";
       console.log("[Build] index.html token=" + BAKED + " loaded");   // provable freshness at page load, no network needed
       var already = null;
       try { already = new URLSearchParams(location.search).get("fresh"); } catch (e) {}
