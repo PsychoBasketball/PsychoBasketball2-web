@@ -10,9 +10,10 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>PsychoBasketball2</title>
+  <title>Psycho Basketball</title>
   <style>
-    html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#05060a; }
+    html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#05060a;
+                 -webkit-user-select:none; -moz-user-select:none; -ms-user-select:none; user-select:none; -webkit-touch-callout:none; }
     #unity-container { position:fixed; inset:0; }
     #unity-canvas { width:100%; height:100%; display:block; background:#05060a; touch-action:none; -webkit-user-select:none; user-select:none; }
     /* THE ROTATE PROMPT (v279). A phone arriving from a Short is held upright; the game plays sideways. Only a coarse
@@ -47,25 +48,34 @@
     #pb-load .row { display:flex; justify-content:space-between; margin-top:10px; font:13px/1 Arial,Helvetica,sans-serif; color:#8fa3c7; letter-spacing:0.06em; }
     #pb-load .row b { color:#ffd85a; font-weight:700; font-variant-numeric:tabular-nums; }
     #pb-load .hint { margin-top:34px; font:12px/1.5 Arial,Helvetica,sans-serif; color:#5f6f8c; }
+    #pb-load .foot { margin-top:26px; font:12px/1.5 Arial,Helvetica,sans-serif; color:#3f4a60; }
+    #pb-load .foot a, #pb-fail .foot a { color:#5f6f8c; text-decoration:none; border-bottom:1px solid #2a3550; }
+    /* WHEN IT CANNOT RUN (v283). WebGL missing, WebAssembly missing, out of memory, a crash in the engine: no Unity banner,
+       no browser dialog — one panel in the game's own clothes, with the reason in plain words and the one thing to try. */
+    #pb-fail { position:fixed; inset:0; z-index:30000; display:none; align-items:center; justify-content:center; text-align:center; background:#05060a;
+               background-image:radial-gradient(ellipse 70% 55% at 50% 45%, rgba(190,56,70,0.22), rgba(5,6,10,0) 70%); color:#e9edf5; padding:24px;
+               font-family:"Arial Narrow","Helvetica Neue",Arial,sans-serif; }
+    #pb-fail .in { width:min(560px, 88vw); }
+    #pb-fail .eyebrow { font:600 12px/1 Arial,Helvetica,sans-serif; letter-spacing:0.28em; color:#8fa3c7; text-transform:uppercase; margin-bottom:14px; }
+    #pb-fail h1 { margin:0; font:900 clamp(34px,9vw,64px)/0.92 Impact,"Arial Narrow","Helvetica Neue",Arial,sans-serif; text-transform:uppercase; color:#fff;
+                  text-shadow:0 2px 0 #1a2438, 0 0 28px rgba(230,80,100,0.30); }
+    #pb-fail .line { margin:22px 0 0; font:600 18px/1.35 Arial,Helvetica,sans-serif; color:#ffd85a; }
+    #pb-fail .sub { margin:10px auto 0; max-width:460px; font:14px/1.5 Arial,Helvetica,sans-serif; color:#a9b7d0; }
+    #pb-fail .detail { margin:18px auto 0; max-width:460px; font:11px/1.4 Menlo,Consolas,monospace; color:#5f6f8c; word-break:break-word; }
+    #pb-fail button { margin-top:26px; font:700 15px/1 Arial,Helvetica,sans-serif; letter-spacing:0.06em; text-transform:uppercase; color:#05060a; background:#ffd85a;
+                      border:0; border-radius:6px; padding:14px 26px; cursor:pointer; }
+    #pb-fail .foot { margin-top:28px; font:12px/1.5 Arial,Helvetica,sans-serif; color:#3f4a60; }
     #unity-loading-bar { display:none; }
-    #unity-warning { position:fixed; left:50%; top:8px; transform:translateX(-50%); z-index:10; font-family:Arial,sans-serif; }
   </style>
-  <!-- Google Identity Services (browser sign-in). Client ID only (no secret in the browser). The OAuth
-       "Authorized JavaScript origin" must match the serving origin: https://psychobasketball.com -->
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
-<!-- Analytics (injected at deploy time by tools/inject-analytics.sh — NOT part of the Unity build). -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5P4HDQKQXS"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-5P4HDQKQXS', {
-      // Which of the two games this is, so the arcade and the open world can be told apart in reports
-      // even if the URL ever changes.
-      'game': 'hood',
-      'page_title': 'PsychoBasketball — hood'
-    });
-  </script>
+  <!-- THE HOOD PAGE (v283). No third-party script, no tracker, no sign-in, no external link but our own privacy and
+       terms pages: the portals (CrazyGames, Poki) block or reject every one of those inside the game frame, and the
+       hood never signs anyone in. The arcade keeps its own template (PsychoFit). -->
+  <meta name="description" content="Psycho Basketball — an open world basketball game. Free to play in the browser.">
+  <link rel="icon" href="favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
 </head>
 <body>
   <div id="unity-container">
@@ -77,7 +87,19 @@
         <div class="sub">an open world basketball game</div>
         <div class="track"><div class="fill" id="pb-fill"></div></div>
         <div class="row"><span id="pb-stage">Connecting</span><b id="pb-pct">0%</b></div>
-        <div class="hint" id="pb-hint">About 27 MB the first time; your browser keeps it for next time.</div>
+        <div class="hint" id="pb-hint">About 23 MB the first time; your browser keeps it for next time.</div>
+        <div class="foot"><a href="/privacy.html" target="_blank" rel="noopener">Privacy</a> &nbsp;&middot;&nbsp; <a href="/terms.html" target="_blank" rel="noopener">Terms</a></div>
+      </div>
+    </div>
+    <div id="pb-fail">
+      <div class="in">
+        <div class="eyebrow">Free to play &middot; in the browser</div>
+        <h1>Psycho Basketball</h1>
+        <div class="line" id="pb-fail-line">This browser can't run the game</div>
+        <div class="sub" id="pb-fail-sub">It needs WebGL 2 and WebAssembly. The latest Chrome, Edge, Firefox or Safari has both.</div>
+        <div class="detail" id="pb-fail-detail"></div>
+        <button type="button" id="pb-fail-retry">Try again</button>
+        <div class="foot"><a href="/privacy.html" target="_blank" rel="noopener">Privacy</a> &nbsp;&middot;&nbsp; <a href="/terms.html" target="_blank" rel="noopener">Terms</a></div>
       </div>
     </div>
     <div id="unity-loading-bar" hidden></div>
@@ -90,33 +112,70 @@
         <div class="sub">The game plays in landscape. It keeps loading while you turn.</div>
       </div>
     </div>
-    <div id="unity-warning"></div>
   </div>
   <script>
     var canvas = document.querySelector("#unity-canvas");
 
-    function unityShowBanner(msg, type) {
-      var w = document.querySelector("#unity-warning");
-      var d = document.createElement('div'); d.innerHTML = msg;
-      d.style = (type == 'error') ? 'background:#c0392b;padding:8px;color:#fff' : 'background:#caa400;padding:8px';
-      w.appendChild(d);
-      if (type != 'error') setTimeout(function(){ try { w.removeChild(d); } catch (e) {} }, 5000);
+    // THE FAILURE PATH (v283). Everything Unity would have put in a yellow/red banner or a browser dialog lands here:
+    // the loader's showBanner (WebGL / WebAssembly missing, a fetch that failed), createUnityInstance's rejection, and
+    // the runtime's errorHandler (an abort, out of memory, an uncaught exception). One panel, the game's own look, a
+    // reason a player can read, and a retry. Warnings that are not errors are logged and otherwise ignored — a
+    // banner over the game frame is exactly what the portals reject.
+    var pbFailShown = false;
+    function pbFail(line, sub, detail) {
+      var p = document.getElementById("pb-fail");
+      if (!pbFailShown) {
+        document.getElementById("pb-fail-line").textContent = line;
+        document.getElementById("pb-fail-sub").textContent = sub;
+        document.getElementById("pb-fail-detail").textContent = detail ? String(detail).slice(0, 240) : "";
+        pbFailShown = true;
+      }
+      var l = document.getElementById("pb-load"); if (l) l.style.display = "none";
+      p.style.display = "flex";
+      console.error("[Page] FAIL: " + line + " — " + (detail || ""));
     }
+    function pbReasonFor(msg) {
+      var m = String(msg || "").toLowerCase();
+      // memory first: "Cannot allocate Wasm memory" is a memory problem that happens to mention wasm
+      if (m.indexOf("memory") >= 0 || m.indexOf("allocat") >= 0 || m.indexOf("oom") >= 0)
+        return ["The game ran out of memory", "Close other tabs and apps and try again. On a phone, a restart frees the most."];
+      if (m.indexOf("webgl") >= 0 || m.indexOf("graphics") >= 0)
+        return ["This browser can't run the game", "It needs WebGL 2. Turn on hardware acceleration, or use the latest Chrome, Edge, Firefox or Safari."];
+      if (m.indexOf("webassembly") >= 0 || m.indexOf("wasm") >= 0)
+        return ["This browser can't run the game", "It needs WebAssembly. The latest Chrome, Edge, Firefox or Safari has it."];
+      if (m.indexOf("fetch") >= 0 || m.indexOf("download") >= 0 || m.indexOf("network") >= 0 || m.indexOf("failed to load") >= 0)
+        return ["The game files didn't arrive", "Check the connection and try again."];
+      return ["Something went wrong", "The game stopped. Try again; if it keeps happening, another browser usually works."];
+    }
+    function unityShowBanner(msg, type) {
+      if (type !== "error") { console.warn("[Unity] " + msg); return; }
+      var r = pbReasonFor(msg); pbFail(r[0], r[1], msg);
+    }
+    document.getElementById("pb-fail-retry").addEventListener("click", function () { location.reload(); });
 
     var buildUrl = "Build";
-    // Per-deploy CACHE-BUST token: tools/deploy-web.sh replaces 20260917190057 with a unique value every
+    // Per-deploy CACHE-BUST token: tools/deploy-web.sh replaces 20260918102430 with a unique value every
     // deploy, so the browser fetches FRESH build files and can never serve a stale .data/.wasm/.framework.
-    var cb = "?v=20260917190057";
+    var cb = "?v=20260918102430";
     var config = {
       arguments: [],
       dataUrl: buildUrl + "/WebGL-Hood.data" + cb,
       frameworkUrl: buildUrl + "/WebGL-Hood.framework.js" + cb,
       codeUrl: buildUrl + "/WebGL-Hood.wasm" + cb,
       streamingAssetsUrl: "StreamingAssets",
+      // NOT THE PRODUCT'S NAME (v283). The product is "Psycho Basketball" in ProjectSettings. These two strings key the
+      // runtime's DOWNLOAD CACHE (UnityCache, "companyName_productName"), so they stay what every returning browser
+      // cached the data file under — change them and every player re-downloads 10 MB once. The SAVE path is not
+      // theirs: the runtime keys /idbfs/<md5> on the page's own URL (measured: md5("https://psychobasketball.com/hood")).
       companyName: "DefaultCompany",
       productName: "PsychoBasketball2",
-      productVersion: "0.1",
+      productVersion: "1.0.283",
       showBanner: unityShowBanner,
+      // A crash in the engine (an abort, out of memory, an uncaught exception) comes here instead of a browser dialog.
+      errorHandler: function (message, filename, lineno) {
+        var r = pbReasonFor(message); pbFail(r[0], r[1], message + (filename ? " (" + filename + ":" + lineno + ")" : ""));
+        return true;    // handled: the runtime shows nothing of its own
+      },
       // We size the WebGL render target OURSELVES (below). By default Unity matches it to the canvas DOM size
       // x devicePixelRatio - that DPR multiply is what made the UI render tiny on Retina/high-DPI screens.
       matchWebGLToCanvasSize: false,
@@ -156,188 +215,8 @@
     window.addEventListener("orientationchange", function () { setTimeout(pbUpdateRotate, 60); });
     pbUpdateRotate();
 
-    // ===================== GOOGLE SIGN-IN (Google Identity Services) =====================
-    // The Unity login calls window.PBGoogleSignIn(targetName) via Assets/Plugins/WebGL/GoogleSignIn.jslib.
-    // We show the official Google button, and on success decode the ID-token JWT (id/name/email) and
-    // SendMessage it back to Unity. Client ID only - no secret here; the backend verifies the token later.
-    var PB_GOOGLE_CLIENT_ID = "288835060053-6247gc14ioduavd95c9gk6auttceu7j6.apps.googleusercontent.com";
-    var pbGoogleTarget = null, pbGoogleInited = false;
-
-    function pbGsiSend(method, msg) {
-      if (window.__unityInstance && pbGoogleTarget) window.__unityInstance.SendMessage(pbGoogleTarget, method, msg || "");
-    }
-    // Decode a JWT payload (base64url, UTF-8 safe). Display only - signature verification is the backend's job.
-    function pbDecodeJwt(tok) {
-      try {
-        var p = tok.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-        while (p.length % 4) p += "=";
-        var json = decodeURIComponent(atob(p).split("").map(function (c) {
-          return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(""));
-        return JSON.parse(json);
-      } catch (e) { return null; }
-    }
-    function pbGoogleCallback(resp) {
-      pbCloseGoogleModal();
-      var info = (resp && resp.credential) ? pbDecodeJwt(resp.credential) : null;
-      if (info && info.sub) {
-        pbGsiSend("OnGoogleCredential", JSON.stringify({
-          id: info.sub, name: info.name || info.email || "Google Player", email: info.email || ""
-        }));
-      } else {
-        pbGsiSend("OnGoogleSignInFailed", "no-credential");
-      }
-    }
-    function pbInitGoogle() {
-      if (pbGoogleInited) return true;
-      if (typeof google === "undefined" || !google.accounts || !google.accounts.id) return false;
-      google.accounts.id.initialize({
-        client_id: PB_GOOGLE_CLIENT_ID, callback: pbGoogleCallback,
-        auto_select: false, cancel_on_tap_outside: true
-      });
-      pbGoogleInited = true;
-      return true;
-    }
-    function pbCloseGoogleModal() { var e = document.getElementById("pb-gsi-overlay"); if (e && e.parentNode) e.parentNode.removeChild(e); }
-    function pbShowGoogleModal() {
-      pbCloseGoogleModal();
-      var ov = document.createElement("div"); ov.id = "pb-gsi-overlay";
-      ov.style.cssText = "position:fixed;inset:0;background:rgba(3,5,12,0.82);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:Arial,Helvetica,sans-serif;";
-      var box = document.createElement("div");
-      box.style.cssText = "background:#0e1422;border:1px solid #2a3550;border-radius:12px;padding:24px 26px;text-align:center;max-width:340px;box-shadow:0 12px 44px rgba(0,0,0,0.6);";
-      box.innerHTML = '<div style="color:#e7ecff;font-size:17px;font-weight:bold;">Sign in to Psycho Basketball</div>'
-                    + '<div style="color:#7f8db0;font-size:12px;margin:6px 0 18px;">+25% rewards &amp; cross-device save</div>';
-      var slot = document.createElement("div"); slot.id = "pb-gsi-button"; slot.style.cssText = "display:flex;justify-content:center;min-height:44px;";
-      box.appendChild(slot);
-      var cancel = document.createElement("div");
-      cancel.textContent = "Cancel"; cancel.style.cssText = "margin-top:16px;color:#8aa0c8;font-size:13px;cursor:pointer;text-decoration:underline;";
-      cancel.onclick = function () { pbCloseGoogleModal(); pbGsiSend("OnGoogleSignInFailed", "cancelled"); };
-      box.appendChild(cancel);
-      ov.addEventListener("click", function (e) { if (e.target === ov) { pbCloseGoogleModal(); pbGsiSend("OnGoogleSignInFailed", "cancelled"); } });
-      ov.appendChild(box); document.body.appendChild(ov);
-      google.accounts.id.renderButton(slot, { theme: "filled_blue", size: "large", shape: "pill", text: "continue_with", width: 260 });
-    }
-    // Entry point called from the .jslib when the player taps "Continue with Google" in the Unity menu.
-    // The GIS library loads async, so wait briefly for it before giving up (avoids a race on a fast tap).
-    window.PBGoogleSignIn = function (target) {
-      pbGoogleTarget = target;
-      var tries = 0;
-      (function attempt() {
-        if (pbInitGoogle()) { pbShowGoogleModal(); return; }
-        if (++tries > 40) { pbGsiSend("OnGoogleSignInFailed", "gis-not-loaded"); return; }
-        setTimeout(attempt, 100);   // up to ~4s for accounts.google.com/gsi/client to finish loading
-      })();
-    };
-    // =====================================================================================
-
-    // ===================== TELEGRAM + DISCORD SIGN-IN =====================
-    // Same pattern as Google: tap in Unity -> SocialSignIn.jslib -> these functions -> a small modal with the
-    // provider's REAL button -> real auth -> SendMessage the verified identity back to Unity. Fill in the two
-    // config values once you've registered each app (see the report), then rebuild. Until set, they fail
-    // cleanly (NO fake sign-in). Client-side identifiers only - no bot token / client secret in the browser.
-    var PB_TELEGRAM_BOT = "PsychoBasketballBot";   // BotFather bot USERNAME (no @); /setdomain -> psychobasketball.com
-    var PB_DISCORD_CLIENT_ID = "1515774738960617584";   // Discord application CLIENT ID (redirect URI: <origin>/discord-callback.html)
-
-    // A small on-screen toast so sign-in failures are VISIBLE (instead of silently doing nothing).
-    function pbToast(msg, isError) {
-      var t = document.createElement("div");
-      t.textContent = msg;
-      t.style.cssText = "position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:100000;color:#fff;padding:10px 16px;border-radius:8px;font:13px Arial,Helvetica,sans-serif;max-width:90%;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.5);background:" + (isError ? "#7a1f1f" : "#1f3a5a") + ";";
-      document.body.appendChild(t);
-      setTimeout(function () { try { t.parentNode.removeChild(t); } catch (e) {} }, 6000);
-    }
-
-    // shared modal (kept separate from the Google one so the live Google flow is untouched)
-    function pbCloseSocialModal() { var e = document.getElementById("pb-social-overlay"); if (e && e.parentNode) e.parentNode.removeChild(e); }
-    function pbShowSocialModal(title, render, onCancel) {
-      pbCloseSocialModal();
-      var ov = document.createElement("div"); ov.id = "pb-social-overlay";
-      ov.style.cssText = "position:fixed;inset:0;background:rgba(3,5,12,0.82);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:Arial,Helvetica,sans-serif;";
-      var box = document.createElement("div");
-      box.style.cssText = "background:#0e1422;border:1px solid #2a3550;border-radius:12px;padding:24px 26px;text-align:center;max-width:340px;box-shadow:0 12px 44px rgba(0,0,0,0.6);";
-      box.innerHTML = '<div style="color:#e7ecff;font-size:17px;font-weight:bold;">' + title + '</div>'
-                    + '<div style="color:#7f8db0;font-size:12px;margin:6px 0 18px;">+25% rewards &amp; cross-device save</div>';
-      var slot = document.createElement("div"); slot.style.cssText = "display:flex;justify-content:center;min-height:44px;";
-      box.appendChild(slot);
-      var cancel = document.createElement("div");
-      cancel.textContent = "Cancel"; cancel.style.cssText = "margin-top:16px;color:#8aa0c8;font-size:13px;cursor:pointer;text-decoration:underline;";
-      cancel.onclick = function () { pbCloseSocialModal(); if (onCancel) onCancel(); };
-      box.appendChild(cancel);
-      ov.addEventListener("click", function (e) { if (e.target === ov) { pbCloseSocialModal(); if (onCancel) onCancel(); } });
-      ov.appendChild(box); document.body.appendChild(ov);
-      render(slot);
-    }
-
-    // --- TELEGRAM (official Login Widget) ---
-    var pbTgTarget = null;
-    function pbTgSend(method, msg) { if (window.__unityInstance && pbTgTarget) window.__unityInstance.SendMessage(pbTgTarget, method, msg || ""); }
-    window.pbOnTelegramAuth = function (user) {   // the widget's data-onauth calls this global with the signed-in user
-      pbCloseSocialModal();
-      if (user && user.id) {
-        var nm = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || "Telegram Player";
-        pbTgSend("OnTelegramCredential", JSON.stringify({ id: String(user.id), name: nm, username: user.username || "" }));
-      } else { pbTgSend("OnTelegramFailed", "no-user"); }
-    };
-    window.PBTelegramSignIn = function (target) {
-      pbTgTarget = target;
-      console.log("[PB] Telegram tapped; bot=" + PB_TELEGRAM_BOT + " host=" + location.hostname);
-      if (!PB_TELEGRAM_BOT) { pbToast("Telegram isn't configured (no bot username).", true); pbTgSend("OnTelegramFailed", "not-configured"); return; }
-      pbShowSocialModal("Continue with Telegram", function (slot) {
-        var note = document.createElement("div");
-        note.style.cssText = "color:#7f8db0;font-size:12px;margin-top:12px;max-width:264px;";
-        note.textContent = "Loading Telegram…";
-        var s = document.createElement("script");
-        s.async = true; s.src = "https://telegram.org/js/telegram-widget.js?22";
-        s.setAttribute("data-telegram-login", PB_TELEGRAM_BOT);
-        s.setAttribute("data-size", "large");
-        s.setAttribute("data-userpic", "false");
-        s.setAttribute("data-request-access", "write");
-        s.setAttribute("data-onauth", "pbOnTelegramAuth(user)");
-        s.onerror = function () { note.style.color = "#ff9b9b"; note.textContent = "Couldn't load Telegram's widget (network/blocked)."; console.warn("[PB] telegram-widget.js failed to load"); };
-        slot.appendChild(s); slot.appendChild(note);
-        // If the button iframe never appears, the bot username is wrong OR /setdomain isn't set for this host.
-        setTimeout(function () {
-          if (slot.querySelector("iframe")) { note.textContent = ""; return; }
-          note.style.color = "#ff9b9b";
-          note.textContent = "Telegram button didn't load - check bot @" + PB_TELEGRAM_BOT + " and that /setdomain = " + location.hostname;
-          console.warn("[PB] Telegram widget did not render. bot=" + PB_TELEGRAM_BOT + " host=" + location.hostname);
-        }, 4500);
-      }, function () { pbTgSend("OnTelegramFailed", "cancelled"); });
-    };
-
-    // --- DISCORD (OAuth2 implicit flow: popup -> discord-callback.html -> postMessage) ---
-    var pbDcTarget = null, pbDcListening = false;
-    function pbDcSend(method, msg) { if (window.__unityInstance && pbDcTarget) window.__unityInstance.SendMessage(pbDcTarget, method, msg || ""); }
-    window.PBDiscordSignIn = function (target) {
-      pbDcTarget = target;
-      console.log("[PB] Discord tapped; clientId=" + PB_DISCORD_CLIENT_ID);
-      if (!PB_DISCORD_CLIENT_ID) { pbToast("Discord isn't configured (no client ID).", true); pbDcSend("OnDiscordFailed", "not-configured"); return; }
-      if (!pbDcListening) {
-        pbDcListening = true;
-        window.addEventListener("message", function (e) {
-          if (e.origin !== location.origin || !e.data || !e.data.pbDiscord) return;
-          pbCloseSocialModal();
-          var d = e.data.pbDiscord;
-          if (d.ok && d.id) pbDcSend("OnDiscordCredential", JSON.stringify({ id: d.id, name: d.name || "", username: d.username || "" }));
-          else { pbToast("Discord sign-in failed (couldn't read your profile).", true); pbDcSend("OnDiscordFailed", "auth-failed"); }
-        });
-      }
-      pbShowSocialModal("Continue with Discord", function (slot) {
-        var btn = document.createElement("button");
-        btn.textContent = "Continue with Discord";
-        btn.style.cssText = "background:#5865F2;color:#fff;border:0;border-radius:20px;padding:11px 24px;font-size:15px;font-weight:bold;cursor:pointer;";
-        btn.onclick = function () {
-          var redirect = location.origin + "/discord-callback.html";
-          var url = "https://discord.com/oauth2/authorize?client_id=" + encodeURIComponent(PB_DISCORD_CLIENT_ID)
-                  + "&response_type=token&scope=" + encodeURIComponent("identify email")
-                  + "&prompt=consent&redirect_uri=" + encodeURIComponent(redirect);
-          var w = window.open(url, "pb_discord_oauth", "width=520,height=760");
-          if (!w) { pbToast("Popup blocked - allow popups for this site, then retry.", true); console.warn("[PB] Discord popup blocked"); }
-        };
-        slot.appendChild(btn);
-      }, function () { pbDcSend("OnDiscordFailed", "cancelled"); });
-    };
-    // =====================================================================
+    // NO SIGN-IN ON THIS PAGE (v283). The Google / Telegram / Discord bridges live in the arcade template; the hood
+    // never calls them, and the .jslib fails cleanly when window.PBGoogleSignIn is not a function.
 
     // Boot the Unity build (loader.js -> createUnityInstance). Called only AFTER the freshness gate below.
     // THE BAR MEANS SOMETHING: Unity's progress runs 0 -> 0.9 while the files download and lands on 1.0 only when the
@@ -360,18 +239,16 @@
       script.onload = function () {
         createUnityInstance(canvas, config, function (progress) { pbSetProgress(progress); })
         .then(function (unityInstance) {
-          window.__unityInstance = unityInstance;   // so the Google bridge can SendMessage results back to Unity
+          window.__unityInstance = unityInstance;   // the dev bridge and the harness drivers SendMessage through this
           pbSetProgress(1);
           console.log("[Load] engine started " + ((Date.now() - t0) / 1000).toFixed(1) + "s after the loader");
           setTimeout(function () { pbLoad.style.display = "none"; }, 250);   // the menu draws its first frame under it
           resizeCanvas();
         }).catch(function (message) {
-          pbStage.textContent = "Could not start";
-          pbHint.textContent = "This browser could not run the game: " + message + " — try the latest Chrome, Edge or Firefox on a desktop.";
-          console.error("[Load] " + message);
+          var r = pbReasonFor(message); pbFail(r[0], r[1], message);
         });
       };
-      script.onerror = function () { pbStage.textContent = "Could not load"; pbHint.textContent = "The game files did not download. Check the connection and reload."; };
+      script.onerror = function () { pbFail("The game files didn't arrive", "Check the connection and try again.", "loader.js failed to load"); };
       document.body.appendChild(script);
     }
 
@@ -384,7 +261,7 @@
     // token, this index is stale -> reload with a cache-busting query on the PAGE URL so the browser must
     // refetch a fresh index. Guarded to reload at most ONCE (?fresh=), so a lagging CDN edge can't loop.
     (function pbFreshnessGate() {
-      var BAKED = "20260917190057";
+      var BAKED = "20260918102430";
       console.log("[Build] index.html token=" + BAKED + " loaded");   // provable freshness at page load, no network needed
       var already = null;
       try { already = new URLSearchParams(location.search).get("fresh"); } catch (e) {}
